@@ -1,0 +1,39 @@
+# ============================================
+# 深度学习训练框架
+# ============================================
+# YOLO 训练框架
+ultralytics>=8.3.0
+
+# PyTorch 安装说明：
+# 不建议写在 requirements.txt 中，请根据系统单独安装：
+# 
+# CPU 版本：
+#   pip install torch torchvision torchaudio
+# 
+# GPU 版本（CUDA 11.8）：
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# 
+# GPU 版本（CUDA 12.1）：
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#
+# 更多信息：https://pytorch.org/get-started/locally/
+
+# ============================================
+# 数据处理
+# ============================================
+numpy>=1.24.0
+Pillow>=10.0.0
+opencv-python>=4.8.0
+imagehash>=4.3.1
+
+# ============================================
+# 网络请求（数据采集）
+# ============================================
+requests>=2.31.0
+tqdm>=4.66.0
+
+# ============================================
+# 数据标注工具（可选）
+# ============================================
+# 如需使用 LabelImg 标注工具，取消下面的注释：
+# labelImg>=1.8.0
