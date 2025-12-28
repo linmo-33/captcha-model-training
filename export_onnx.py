@@ -13,7 +13,9 @@ def export_to_onnx(
     model_path: str = 'data/models/yolo_best.pt',
     output_path: str = 'data/models/yolo_best.onnx',
     imgsz: int = 640,
-    simplify: bool = True
+    simplify: bool = True,
+    dynamic: bool = False,
+    half: bool = False
 ):
     """
     导出 YOLO 模型为 ONNX 格式
@@ -23,6 +25,8 @@ def export_to_onnx(
         output_path: ONNX 输出路径
         imgsz: 输入图像尺寸
         simplify: 是否简化 ONNX 模型
+        dynamic: 是否支持动态输入尺寸
+        half: 是否使用FP16精度（减小模型大小）
     """
     model_path = Path(model_path)
     output_path = Path(output_path)
@@ -38,6 +42,8 @@ def export_to_onnx(
         format='onnx',
         imgsz=imgsz,
         simplify=simplify,
+        dynamic=dynamic,
+        half=half,
         opset=12  # ONNX opset 版本
     )
     
@@ -56,10 +62,26 @@ def export_to_onnx(
         print(f"✗ 导出失败")
     
     # 显示模型信息
-    print(f"\n模型信息:")
-    print(f"  类别数量: {len(model.names)}")
-    print(f"  类别列表: {model.names}")
-    print(f"  输入尺寸: {imgsz}x{imgsz}")
+    if output_path.exists():
+        import os
+        file_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+        print(f"\n模型信息:")
+        print(f"  类别数量: {len(model.names)}")
+        print(f"  类别列表: {list(model.names.values())}")
+        print(f"  输入尺寸: {imgsz}x{imgsz}")
+        print(f"  文件大小: {file_size:.2f} MB")
+        print(f"  动态输入: {'是' if dynamic else '否'}")
+        print(f"  FP16精度: {'是' if half else '否'}")
+    elif auto_onnx.exists():
+        import os
+        file_size = os.path.getsize(auto_onnx) / (1024 * 1024)  # MB
+        print(f"\n模型信息:")
+        print(f"  类别数量: {len(model.names)}")
+        print(f"  类别列表: {list(model.names.values())}")
+        print(f"  输入尺寸: {imgsz}x{imgsz}")
+        print(f"  文件大小: {file_size:.2f} MB")
+        print(f"  动态输入: {'是' if dynamic else '否'}")
+        print(f"  FP16精度: {'是' if half else '否'}")
 
 
 if __name__ == '__main__':
@@ -68,6 +90,8 @@ if __name__ == '__main__':
     parser.add_argument('--output', default='data/models/yolo_best.onnx', help='ONNX 输出路径')
     parser.add_argument('--imgsz', type=int, default=640, help='输入图像尺寸')
     parser.add_argument('--no-simplify', action='store_true', help='不简化 ONNX 模型')
+    parser.add_argument('--dynamic', action='store_true', help='支持动态输入尺寸')
+    parser.add_argument('--half', action='store_true', help='使用FP16精度（减小模型大小）')
     
     args = parser.parse_args()
     
@@ -75,5 +99,7 @@ if __name__ == '__main__':
         model_path=args.model,
         output_path=args.output,
         imgsz=args.imgsz,
-        simplify=not args.no_simplify
+        simplify=not args.no_simplify,
+        dynamic=args.dynamic,
+        half=args.half
     )
