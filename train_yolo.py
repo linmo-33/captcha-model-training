@@ -36,7 +36,7 @@ def train(
     model: str = 'yolov8n.pt',
     epochs: int = 100,
     imgsz: int = 640,
-    batch: int = 4,
+    batch: int = 16,  # 从4改为16，更好利用GPU
     # 默认优先使用第一张 GPU；如无 CUDA，Ultralytics 会自动回退到 CPU
     device: str | int | None = 0,
     val_ratio: float = 0.2,
@@ -56,6 +56,10 @@ def train(
         project=str(root / 'runs'),
         name='detect',
         exist_ok=True,
+        # 添加一些有用的训练参数
+        save_period=10,  # 每10个epoch保存一次
+        patience=50,     # 早停耐心值
+        workers=8,       # 数据加载线程数
     )
 
     # 复制 best.pt 到 data/models 方便管理

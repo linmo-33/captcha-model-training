@@ -1,0 +1,32 @@
+path: data/dataset # dataset root dir
+train: images/train
+val: images/val
+
+nc: 24
+names:
+  [
+    "num_0",
+    "num_1",
+    "num_2",
+    "num_4",
+    "num_5",
+    "num_7",
+    "num_8",
+    "num_9",
+    "local",
+    "github",
+    "player",
+    "cat",
+    "file",
+    "haha",
+    "smirk",
+    "naughty",
+    "surprise",
+    "smile",
+    "polyline",
+    "report",
+    "castle0",
+    "castle1",
+    "castle2",
+    "house",
+  ]
