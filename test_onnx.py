@@ -226,16 +226,130 @@ def test_onnx_model(model_path: str, image_path: str, conf_threshold: float = 0.
     return detections
 
 
+def test_directory(model_path: str, test_dir: str, conf_threshold: float = 0.25, max_images: int = 10):
+    """批量测试目录中的图片"""
+    # 加载模型
+    session, input_info, output_info = load_onnx_model(model_path)
+    
+    # 加载类别名称
+    class_names = load_class_names()
+    
+    # 获取图片文件
+    test_path = Path(test_dir)
+    if not test_path.exists():
+        print(f"测试目录不存在: {test_dir}")
+        return
+    
+    image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+    image_files = [f for f in test_path.iterdir() 
+                   if f.suffix.lower() in image_extensions]
+    
+    if not image_files:
+        print(f"在 {test_dir} 中未找到图片文件")
+        return
+    
+    # 限制测试数量
+    image_files = image_files[:max_images]
+    print(f"\n开始测试 {len(image_files)} 张图片...")
+    
+    total_time = 0
+    total_detections = 0
+    results_summary = []
+    
+    for i, img_file in enumerate(image_files, 1):
+        print(f"\n[{i}/{len(image_files)}] 测试: {img_file.name}")
+        
+        try:
+            detections, inference_time = test_single_image_core(
+                session, input_info, str(img_file), class_names, conf_threshold
+            )
+            
+            total_time += inference_time
+            total_detections += len(detections)
+            
+            print(f"  推理时间: {inference_time*1000:.1f}ms")
+            
+            if detections:
+                print(f"  检测到 {len(detections)} 个目标:")
+                for det in detections:
+                    class_name = class_names[det['class_id']] if det['class_id'] < len(class_names) else f"class_{det['class_id']}"
+                    print(f"    {class_name}: {det['confidence']:.3f}")
+                
+                # 保存结果图片
+                output_path = f"onnx_result_{img_file.stem}.jpg"
+                draw_detections(str(img_file), detections, class_names, output_path)
+            else:
+                print("  未检测到任何目标")
+            
+            results_summary.append({
+                'image': img_file.name,
+                'detections': len(detections),
+                'inference_time': inference_time
+            })
+            
+        except Exception as e:
+            print(f"  错误: {e}")
+    
+    # 统计信息
+    print(f"\n=== 测试完成 ===")
+    print(f"总图片数: {len(image_files)}")
+    print(f"总检测数: {total_detections}")
+    print(f"平均推理时间: {total_time/len(image_files)*1000:.1f}ms")
+    print(f"总用时: {total_time:.2f}s")
+    
+    return results_summary
+
+
+def test_single_image_core(session, input_info, image_path: str, class_names: list, conf_threshold: float = 0.25):
+    """测试单张图片的核心函数（返回检测结果和推理时间）"""
+    import time
+    
+    # 获取输入尺寸
+    input_shape = input_info.shape
+    if len(input_shape) == 4:
+        input_size = (input_shape[2], input_shape[3])
+    else:
+        input_size = (640, 640)
+    
+    # 预处理
+    input_data, scale, pad_offset, original_shape = preprocess_image(image_path, input_size)
+    
+    # 推理
+    start_time = time.time()
+    input_name = input_info.name
+    outputs = session.run(None, {input_name: input_data})
+    inference_time = time.time() - start_time
+    
+    # 后处理
+    detections = postprocess_outputs(outputs, scale, pad_offset, original_shape, conf_threshold)
+    
+    return detections, inference_time
+
+
 def main():
     parser = argparse.ArgumentParser(description='测试 ONNX 模型')
     parser.add_argument('--model', default='data/models/yolo_best.onnx', help='ONNX 模型路径')
-    parser.add_argument('--image', required=True, help='测试图像路径')
+    parser.add_argument('--image', help='测试单张图片')
+    parser.add_argument('--dir', help='测试目录中的图片')
     parser.add_argument('--conf', type=float, default=0.25, help='置信度阈值')
+    parser.add_argument('--max-images', type=int, default=10, help='测试目录时的最大图片数')
     
     args = parser.parse_args()
     
     try:
-        test_onnx_model(args.model, args.image, args.conf)
+        if args.image:
+            # 测试单张图片
+            test_onnx_model(args.model, args.image, args.conf)
+        elif args.dir:
+            # 测试目录
+            test_directory(args.model, args.dir, args.conf, args.max_images)
+        else:
+            print("请指定测试模式:")
+            print("  --image <path>     测试单张图片")
+            print("  --dir <path>       测试目录")
+            print("\n示例:")
+            print("  python test_onnx.py --image data/raw/test.jpg")
+            print("  python test_onnx.py --dir data/raw --max-images 5")
     except Exception as e:
         print(f"错误: {e}")
 
