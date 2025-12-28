@@ -79,65 +79,120 @@ def preprocess_image(image_path: str, input_size: tuple = (640, 640)):
 
 
 def postprocess_outputs(outputs, scale, pad_offset, original_shape, conf_threshold=0.25, iou_threshold=0.45):
-    """后处理模型输出"""
-    # YOLO输出格式: [batch, num_detections, 4 + num_classes]
-    # 4: x_center, y_center, width, height
-    predictions = outputs[0][0]  # 移除批次维度
+    """后处理模型输出 - 优化版本，匹配 PyTorch 效果"""
     
-    # 过滤低置信度检测
-    scores = np.max(predictions[:, 4:], axis=1)
-    valid_indices = scores > conf_threshold
+    # ONNX 输出格式: [batch, num_features, num_anchors]
+    predictions = outputs[0]  # [1, 28, 8400]
+    
+    # 转置为 [batch, num_anchors, num_features]
+    predictions = predictions.transpose(0, 2, 1)  # [1, 8400, 28]
+    predictions = predictions[0]  # 移除批次维度 [8400, 28]
+    
+    # 分离边界框和类别预测
+    boxes = predictions[:, :4]  # [8400, 4] - x_center, y_center, width, height
+    class_scores = predictions[:, 4:]  # [8400, 24] - 类别分数
+    
+    # 应用 sigmoid 激活（如果模型输出没有激活）
+    # class_scores = 1 / (1 + np.exp(-class_scores))  # sigmoid
+    
+    # 获取每个检测的最大类别分数和对应的类别ID
+    max_scores = np.max(class_scores, axis=1)
+    class_ids = np.argmax(class_scores, axis=1)
+    
+    # 确保类别ID在有效范围内
+    class_ids = np.clip(class_ids, 0, 23)
+    
+    # 使用更低的初始阈值来保留更多候选
+    initial_threshold = max(0.1, conf_threshold * 0.5)
+    valid_indices = max_scores > initial_threshold
     
     if not np.any(valid_indices):
         return []
     
-    valid_predictions = predictions[valid_indices]
-    valid_scores = scores[valid_indices]
+    # 筛选有效检测
+    valid_boxes = boxes[valid_indices]
+    valid_scores = max_scores[valid_indices]
+    valid_class_ids = class_ids[valid_indices]
     
-    # 获取类别ID
-    class_ids = np.argmax(valid_predictions[:, 4:], axis=1)
+    # 转换边界框格式
+    x_center, y_center, width, height = valid_boxes[:, 0], valid_boxes[:, 1], valid_boxes[:, 2], valid_boxes[:, 3]
     
-    # 转换边界框格式 (center_x, center_y, w, h) -> (x1, y1, x2, y2)
-    boxes = valid_predictions[:, :4]
-    x_center, y_center, width, height = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
-    
+    # 转换为 x1, y1, x2, y2 格式
     x1 = x_center - width / 2
     y1 = y_center - height / 2
     x2 = x_center + width / 2
     y2 = y_center + height / 2
     
-    # 调整坐标到原始图像
+    # 调整坐标到原始图像尺寸
     pad_x, pad_y = pad_offset
-    x1 = (x1 * 640 - pad_x) / scale
-    y1 = (y1 * 640 - pad_y) / scale
-    x2 = (x2 * 640 - pad_x) / scale
-    y2 = (y2 * 640 - pad_y) / scale
     
-    # 限制在图像范围内
+    # 坐标调整
+    x1 = (x1 - pad_x) / scale
+    y1 = (y1 - pad_y) / scale
+    x2 = (x2 - pad_x) / scale
+    y2 = (y2 - pad_y) / scale
+    
+    # 限制在原始图像范围内
     h, w = original_shape
     x1 = np.clip(x1, 0, w)
     y1 = np.clip(y1, 0, h)
     x2 = np.clip(x2, 0, w)
     y2 = np.clip(y2, 0, h)
     
-    # NMS (非极大值抑制)
-    boxes_for_nms = np.column_stack([x1, y1, x2, y2])
-    indices = cv2.dnn.NMSBoxes(
-        boxes_for_nms.tolist(),
-        valid_scores.tolist(),
-        conf_threshold,
-        iou_threshold
-    )
+    # 更宽松的面积过滤
+    areas = (x2 - x1) * (y2 - y1)
+    min_area = 50  # 降低最小面积要求
+    max_area = w * h * 0.9  # 提高最大面积限制
+    valid_area_indices = (areas > min_area) & (areas < max_area)
     
+    if not np.any(valid_area_indices):
+        return []
+    
+    x1 = x1[valid_area_indices]
+    y1 = y1[valid_area_indices]
+    x2 = x2[valid_area_indices]
+    y2 = y2[valid_area_indices]
+    valid_scores = valid_scores[valid_area_indices]
+    valid_class_ids = valid_class_ids[valid_area_indices]
+    
+    # 按类别分组进行 NMS（避免不同类别之间的抑制）
     results = []
-    if len(indices) > 0:
-        indices = indices.flatten()
-        for i in indices:
-            results.append({
-                'bbox': [int(x1[i]), int(y1[i]), int(x2[i]), int(y2[i])],
-                'confidence': float(valid_scores[i]),
-                'class_id': int(class_ids[i])
-            })
+    unique_classes = np.unique(valid_class_ids)
+    
+    for class_id in unique_classes:
+        class_mask = valid_class_ids == class_id
+        if not np.any(class_mask):
+            continue
+            
+        class_boxes = np.column_stack([x1[class_mask], y1[class_mask], x2[class_mask], y2[class_mask]])
+        class_scores = valid_scores[class_mask]
+        
+        # 对每个类别单独应用 NMS
+        indices = cv2.dnn.NMSBoxes(
+            class_boxes.tolist(),
+            class_scores.tolist(),
+            conf_threshold,  # 使用原始置信度阈值
+            iou_threshold
+        )
+        
+        if len(indices) > 0:
+            if isinstance(indices, np.ndarray):
+                indices = indices.flatten()
+            else:
+                indices = [indices] if not isinstance(indices, list) else indices
+            
+            class_indices = np.where(class_mask)[0]
+            for i in indices:
+                original_idx = class_indices[i]
+                if valid_scores[original_idx] >= conf_threshold:  # 最终置信度检查
+                    results.append({
+                        'bbox': [int(x1[original_idx]), int(y1[original_idx]), int(x2[original_idx]), int(y2[original_idx])],
+                        'confidence': float(valid_scores[original_idx]),
+                        'class_id': int(class_id)
+                    })
+    
+    # 按置信度排序
+    results.sort(key=lambda x: x['confidence'], reverse=True)
     
     return results
 
@@ -332,6 +387,7 @@ def main():
     parser.add_argument('--image', help='测试单张图片')
     parser.add_argument('--dir', help='测试目录中的图片')
     parser.add_argument('--conf', type=float, default=0.25, help='置信度阈值')
+    parser.add_argument('--iou', type=float, default=0.45, help='NMS IoU阈值')
     parser.add_argument('--max-images', type=int, default=10, help='测试目录时的最大图片数')
     
     args = parser.parse_args()
