@@ -1,9 +1,6 @@
-import os
 import cv2
-import numpy as np
 from pathlib import Path
 from ultralytics import YOLO
-import matplotlib.pyplot as plt
 
 
 def _project_root() -> Path:
@@ -156,47 +153,108 @@ def interactive_test(model: YOLO):
             print(f"测试失败: {e}")
 
 
-def main():
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='测试训练好的YOLO模型')
-    parser.add_argument('--model', help='模型文件路径（默认使用最新训练的模型）')
-    parser.add_argument('--image', help='测试单张图片')
-    parser.add_argument('--dir', help='测试目录中的图片')
-    parser.add_argument('--val', action='store_true', help='在验证集上测试')
-    parser.add_argument('--interactive', '-i', action='store_true', help='交互式测试')
-    parser.add_argument('--conf', type=float, default=0.25, help='置信度阈值')
-    parser.add_argument('--max-images', type=int, default=10, help='测试目录时的最大图片数')
-    
-    args = parser.parse_args()
-    
+def interactive_menu():
+    """交互式测试菜单"""
+    print("=" * 50)
+    print("YOLO 模型测试工具")
+    print("=" * 50)
+    print("提示: 直接按回车使用 [默认值]\n")
+
+    # 模型路径
+    default_model = 'data/models/yolo_best.pt'
+    model_path = input(f"模型路径 [{default_model}]: ").strip()
+    model_path = model_path if model_path else default_model
+
+    # 加载模型
     try:
-        # 加载模型
-        model = load_model(args.model)
+        model = load_model(model_path if model_path != default_model else None)
         print(f"模型类别: {list(model.names.values())}")
-        
-        if args.image:
-            # 测试单张图片
-            test_single_image(model, args.image, args.conf)
-        elif args.dir:
-            # 测试目录
-            test_directory(model, args.dir, args.conf, args.max_images)
-        elif args.val:
-            # 测试验证集
-            test_validation_set(model, args.conf)
-        elif args.interactive:
-            # 交互式测试
-            interactive_test(model)
-        else:
-            print("请指定测试模式:")
-            print("  --image <path>     测试单张图片")
-            print("  --dir <path>       测试目录")
-            print("  --val              测试验证集")
-            print("  --interactive      交互式测试")
-            
     except Exception as e:
-        print(f"错误: {e}")
+        print(f"加载模型失败: {e}")
+        return
+
+    # 测试模式
+    print("\n测试模式:")
+    print("  1. 测试单张图片")
+    print("  2. 测试目录")
+    print("  3. 测试验证集")
+    print("  4. 交互式连续测试")
+    mode = input("选择模式 [1]: ").strip()
+    mode = mode if mode else '1'
+
+    # 置信度阈值
+    default_conf = 0.25
+    conf_input = input(f"置信度阈值 [{default_conf}]: ").strip()
+    conf = float(conf_input) if conf_input else default_conf
+
+    if mode == '1':
+        # 单张图片
+        image_path = input("图片路径: ").strip()
+        if not image_path:
+            print("错误: 请输入图片路径")
+            return
+
+        print("\n" + "=" * 50)
+        print("测试配置:")
+        print(f"  模型路径: {model_path}")
+        print(f"  图片路径: {image_path}")
+        print(f"  置信度阈值: {conf}")
+        print("=" * 50)
+
+        confirm = input("\n确认开始测试? [Y/n]: ").strip().lower()
+        if confirm == 'n':
+            print("已取消")
+            return
+
+        test_single_image(model, image_path, conf)
+
+    elif mode == '2':
+        # 测试目录
+        default_dir = 'data/raw'
+        test_dir = input(f"测试目录 [{default_dir}]: ").strip()
+        test_dir = test_dir if test_dir else default_dir
+
+        default_max = 10
+        max_input = input(f"最大图片数 [{default_max}]: ").strip()
+        max_images = int(max_input) if max_input else default_max
+
+        print("\n" + "=" * 50)
+        print("测试配置:")
+        print(f"  模型路径: {model_path}")
+        print(f"  测试目录: {test_dir}")
+        print(f"  最大图片数: {max_images}")
+        print(f"  置信度阈值: {conf}")
+        print("=" * 50)
+
+        confirm = input("\n确认开始测试? [Y/n]: ").strip().lower()
+        if confirm == 'n':
+            print("已取消")
+            return
+
+        test_directory(model, test_dir, conf, max_images)
+
+    elif mode == '3':
+        # 测试验证集
+        print("\n" + "=" * 50)
+        print("测试配置:")
+        print(f"  模型路径: {model_path}")
+        print(f"  置信度阈值: {conf}")
+        print("=" * 50)
+
+        confirm = input("\n确认开始验证集测试? [Y/n]: ").strip().lower()
+        if confirm == 'n':
+            print("已取消")
+            return
+
+        test_validation_set(model, conf)
+
+    elif mode == '4':
+        # 交互式连续测试
+        interactive_test(model)
+
+    else:
+        print("无效的模式选择")
 
 
 if __name__ == '__main__':
-    main()
+    interactive_menu()

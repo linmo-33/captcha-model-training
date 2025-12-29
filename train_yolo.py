@@ -1,4 +1,3 @@
-import os
 import shutil
 from pathlib import Path
 
@@ -85,39 +84,79 @@ def train(
     return results
 
 
-if __name__ == '__main__':
-    import argparse
+def interactive_train():
+    """交互式训练配置"""
+    print("=" * 50)
+    print("YOLO 模型训练工具")
+    print("=" * 50)
+    print("提示: 直接按回车使用 [默认值]\n")
 
-    parser = argparse.ArgumentParser(description='Train YOLO detector (GPU preferred).')
-    parser.add_argument('--model', default='yolov8n.pt')
-    parser.add_argument('--epochs', type=int, default=100)
-    parser.add_argument('--imgsz', type=int, default=640)
-    parser.add_argument('--batch', type=int, default=16)
-    parser.add_argument('--val-ratio', type=float, default=0.2)
-    parser.add_argument(
-        '--device',
-        default='0',
-        help="训练设备：'0'/'1'... 表示GPU编号；或 'cpu'。默认 0",
-    )
+    # 预训练模型
+    default_model = 'yolov8n.pt'
+    model_options = ['yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt']
+    print(f"可选模型: {', '.join(model_options)}")
+    model = input(f"预训练模型 [{default_model}]: ").strip()
+    model = model if model else default_model
 
-    args = parser.parse_args()
+    # 训练轮数
+    default_epochs = 100
+    epochs_input = input(f"训练轮数 [{default_epochs}]: ").strip()
+    epochs = int(epochs_input) if epochs_input else default_epochs
 
-    # Ultralytics 接受 device='cpu' 或 device=0/1/...
-    dev: str | int | None
-    if isinstance(args.device, str) and args.device.lower() == 'cpu':
-        dev = 'cpu'
+    # 图像尺寸
+    default_imgsz = 640
+    imgsz_input = input(f"图像尺寸 [{default_imgsz}]: ").strip()
+    imgsz = int(imgsz_input) if imgsz_input else default_imgsz
+
+    # 批次大小
+    default_batch = 16
+    batch_input = input(f"批次大小 [{default_batch}]: ").strip()
+    batch = int(batch_input) if batch_input else default_batch
+
+    # 设备选择
+    default_device = '0'
+    device_input = input(f"训练设备 (0/1/cpu) [{default_device}]: ").strip()
+    device_input = device_input if device_input else default_device
+
+    # 验证集比例
+    default_val_ratio = 0.2
+    val_ratio_input = input(f"验证集比例 [{default_val_ratio}]: ").strip()
+    val_ratio = float(val_ratio_input) if val_ratio_input else default_val_ratio
+
+    # 解析设备
+    if device_input.lower() == 'cpu':
+        device = 'cpu'
     else:
-        # 允许传 '0' 这种字符串
         try:
-            dev = int(args.device)
-        except Exception:
-            dev = args.device
+            device = int(device_input)
+        except ValueError:
+            device = device_input
+
+    # 确认配置
+    print("\n" + "=" * 50)
+    print("训练配置:")
+    print(f"  预训练模型: {model}")
+    print(f"  训练轮数: {epochs}")
+    print(f"  图像尺寸: {imgsz}")
+    print(f"  批次大小: {batch}")
+    print(f"  训练设备: {device}")
+    print(f"  验证集比例: {val_ratio}")
+    print("=" * 50)
+
+    confirm = input("\n确认开始训练? [Y/n]: ").strip().lower()
+    if confirm == 'n':
+        print("已取消")
+        return
 
     train(
-        model=args.model,
-        epochs=args.epochs,
-        imgsz=args.imgsz,
-        batch=args.batch,
-        device=dev,
-        val_ratio=args.val_ratio,
+        model=model,
+        epochs=epochs,
+        imgsz=imgsz,
+        batch=batch,
+        device=device,
+        val_ratio=val_ratio,
     )
+
+
+if __name__ == '__main__':
+    interactive_train()

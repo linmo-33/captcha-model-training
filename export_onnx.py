@@ -4,7 +4,6 @@
 用于生产环境部署，ONNX 模型更轻量且不依赖 ultralytics
 """
 
-import argparse
 from pathlib import Path
 from ultralytics import YOLO
 
@@ -84,22 +83,65 @@ def export_to_onnx(
         print(f"  FP16精度: {'是' if half else '否'}")
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='导出 YOLO 模型为 ONNX 格式')
-    parser.add_argument('--model', default='data/models/yolo_best.pt', help='PyTorch 模型路径')
-    parser.add_argument('--output', default='data/models/yolo_best.onnx', help='ONNX 输出路径')
-    parser.add_argument('--imgsz', type=int, default=640, help='输入图像尺寸')
-    parser.add_argument('--no-simplify', action='store_true', help='不简化 ONNX 模型')
-    parser.add_argument('--dynamic', action='store_true', help='支持动态输入尺寸')
-    parser.add_argument('--half', action='store_true', help='使用FP16精度（减小模型大小）')
-    
-    args = parser.parse_args()
-    
+def interactive_export():
+    """交互式导出配置"""
+    print("=" * 50)
+    print("YOLO 模型导出 ONNX 工具")
+    print("=" * 50)
+    print("提示: 直接按回车使用 [默认值]\n")
+
+    # 模型路径
+    default_model = 'data/models/yolo_best.pt'
+    model_path = input(f"模型路径 [{default_model}]: ").strip()
+    model_path = model_path if model_path else default_model
+
+    # 输出路径
+    default_output = model_path.replace('.pt', '.onnx')
+    output_path = input(f"输出路径 [{default_output}]: ").strip()
+    output_path = output_path if output_path else default_output
+
+    # 图像尺寸
+    default_imgsz = 640
+    imgsz_input = input(f"输入尺寸 [{default_imgsz}]: ").strip()
+    imgsz = int(imgsz_input) if imgsz_input else default_imgsz
+
+    # 是否简化
+    simplify_input = input("简化模型 [Y/n]: ").strip().lower()
+    simplify = simplify_input != 'n'
+
+    # 动态输入
+    dynamic_input = input("动态输入 [y/N]: ").strip().lower()
+    dynamic = dynamic_input == 'y'
+
+    # FP16 精度
+    half_input = input("FP16精度 [y/N]: ").strip().lower()
+    half = half_input == 'y'
+
+    # 确认配置
+    print("\n" + "=" * 50)
+    print("导出配置:")
+    print(f"  模型路径: {model_path}")
+    print(f"  输出路径: {output_path}")
+    print(f"  输入尺寸: {imgsz}")
+    print(f"  简化模型: {'是' if simplify else '否'}")
+    print(f"  动态输入: {'是' if dynamic else '否'}")
+    print(f"  FP16精度: {'是' if half else '否'}")
+    print("=" * 50)
+
+    confirm = input("\n确认导出? [Y/n]: ").strip().lower()
+    if confirm == 'n':
+        print("已取消")
+        return
+
     export_to_onnx(
-        model_path=args.model,
-        output_path=args.output,
-        imgsz=args.imgsz,
-        simplify=not args.no_simplify,
-        dynamic=args.dynamic,
-        half=args.half
+        model_path=model_path,
+        output_path=output_path,
+        imgsz=imgsz,
+        simplify=simplify,
+        dynamic=dynamic,
+        half=half
     )
+
+
+if __name__ == '__main__':
+    interactive_export()

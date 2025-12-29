@@ -8,7 +8,6 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 from pathlib import Path
-import argparse
 
 
 def load_onnx_model(model_path: str):
@@ -381,34 +380,85 @@ def test_single_image_core(session, input_info, image_path: str, class_names: li
     return detections, inference_time
 
 
-def main():
-    parser = argparse.ArgumentParser(description='测试 ONNX 模型')
-    parser.add_argument('--model', default='data/models/yolo_best.onnx', help='ONNX 模型路径')
-    parser.add_argument('--image', help='测试单张图片')
-    parser.add_argument('--dir', help='测试目录中的图片')
-    parser.add_argument('--conf', type=float, default=0.25, help='置信度阈值')
-    parser.add_argument('--iou', type=float, default=0.45, help='NMS IoU阈值')
-    parser.add_argument('--max-images', type=int, default=10, help='测试目录时的最大图片数')
-    
-    args = parser.parse_args()
-    
-    try:
-        if args.image:
-            # 测试单张图片
-            test_onnx_model(args.model, args.image, args.conf)
-        elif args.dir:
-            # 测试目录
-            test_directory(args.model, args.dir, args.conf, args.max_images)
-        else:
-            print("请指定测试模式:")
-            print("  --image <path>     测试单张图片")
-            print("  --dir <path>       测试目录")
-            print("\n示例:")
-            print("  python test_onnx.py --image data/raw/test.jpg")
-            print("  python test_onnx.py --dir data/raw --max-images 5")
-    except Exception as e:
-        print(f"错误: {e}")
+def interactive_test():
+    """交互式测试"""
+    print("=" * 50)
+    print("ONNX 模型测试工具")
+    print("=" * 50)
+    print("提示: 直接按回车使用 [默认值]\n")
+
+    # 模型路径
+    default_model = 'data/models/yolo_best.onnx'
+    model_path = input(f"模型路径 [{default_model}]: ").strip()
+    model_path = model_path if model_path else default_model
+
+    # 测试模式
+    print("\n测试模式:")
+    print("  1. 测试单张图片")
+    print("  2. 测试目录")
+    mode = input("选择模式 [1]: ").strip()
+    mode = mode if mode else '1'
+
+    # 置信度阈值
+    default_conf = 0.25
+    conf_input = input(f"置信度阈值 [{default_conf}]: ").strip()
+    conf = float(conf_input) if conf_input else default_conf
+
+    # IoU 阈值
+    default_iou = 0.45
+    iou_input = input(f"NMS IoU阈值 [{default_iou}]: ").strip()
+    iou = float(iou_input) if iou_input else default_iou
+
+    if mode == '1':
+        # 单张图片
+        image_path = input("图片路径: ").strip()
+        if not image_path:
+            print("错误: 请输入图片路径")
+            return
+
+        print("\n" + "=" * 50)
+        print("测试配置:")
+        print(f"  模型路径: {model_path}")
+        print(f"  图片路径: {image_path}")
+        print(f"  置信度阈值: {conf}")
+        print(f"  IoU阈值: {iou}")
+        print("=" * 50)
+
+        confirm = input("\n确认开始测试? [Y/n]: ").strip().lower()
+        if confirm == 'n':
+            print("已取消")
+            return
+
+        test_onnx_model(model_path, image_path, conf)
+
+    elif mode == '2':
+        # 测试目录
+        default_dir = 'data/raw'
+        test_dir = input(f"测试目录 [{default_dir}]: ").strip()
+        test_dir = test_dir if test_dir else default_dir
+
+        default_max = 10
+        max_input = input(f"最大图片数 [{default_max}]: ").strip()
+        max_images = int(max_input) if max_input else default_max
+
+        print("\n" + "=" * 50)
+        print("测试配置:")
+        print(f"  模型路径: {model_path}")
+        print(f"  测试目录: {test_dir}")
+        print(f"  最大图片数: {max_images}")
+        print(f"  置信度阈值: {conf}")
+        print(f"  IoU阈值: {iou}")
+        print("=" * 50)
+
+        confirm = input("\n确认开始测试? [Y/n]: ").strip().lower()
+        if confirm == 'n':
+            print("已取消")
+            return
+
+        test_directory(model_path, test_dir, conf, max_images)
+    else:
+        print("无效的模式选择")
 
 
 if __name__ == '__main__':
-    main()
+    interactive_test()
